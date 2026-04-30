@@ -1,1 +1,1 @@
-# bank-system
+# ai-diary
