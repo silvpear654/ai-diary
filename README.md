@@ -13,3 +13,30 @@
 
 팀원 E — 통계 시각화 & 환경 설정 (The Analyst)
 팀원 E는 데이터를 눈에 보이는 형태로 표현하고, 전체 앱의 설정을 관리하는 역할이다. matplotlib 같은 라이브러리나, 순수 터미널 출력만을 사용하는 ASCII 차트 방식으로 최근 일주일간의 감정 변화 추이를 그래프로 시각화하는 기능을 구현한다. 또한 사용자별 테마 색상, 언어 설정, 비밀번호 변경 이력 같은 환경 설정값을 config.json 파일로 저장하고 불러오는 모듈도 만든다. 앱이 처음 실행될 때 설정 파일이 없으면 기본값으로 자동 생성되도록 하는 초기화 로직도 포함된다.
+
+
+💡 공통 주의사항: 팀원 B가 만드는 파일 입출력 함수는 전체 팀이 공유하는 핵심 인터페이스가 되니까, 초반에 팀원 B의 데이터 구조 설계를 먼저 확정하고 나서 나머지 팀원들이 그걸 기반으로 개발하는 순서로 진행하면 충돌이 적을 거야냥!
+입력 내용: 각 파일의 파일명도 추천해줘각 파일의 파일명도 추천해줘4월 30일Claude 응답: 📂 Vibe-Vault — 파일명 추천 구조팀원별 파일명 구조를 체계적으로 설계했다팀원별 파일명 구조를 체계적으로 설계했다📂 Vibe-Vault — 파일명 추천 구조
+
+전체 프로젝트 구조
+vibe-vault/
+│
+├── main.py                 # 프로젝트 메인 진입점 (프로그램 시작)
+├── config.json             # 기본 설정 파일 (자동 생성됨)
+│
+├── vault/                  # 암호화된 일기 데이터 저장소 (자동 생성됨)
+│   ├── 2026-04-30/
+│   ├── index.json
+│   └── ...
+│
+└── src/                    # 소스 코드 폴더
+    │
+    ├── security.py         # 팀원 A: 암호화 & 보안 엔진
+    ├── storage.py          # 팀원 B: 파일 시스템 & 데이터 관리
+    ├── ai_analyzer.py      # 팀원 C: AI 감정 분석 & 요약 에이전트
+    ├── cli.py              # 팀원 D: 명령어 인터페이스 & 파서
+    ├── analytics.py        # 팀원 E: 통계 시각화
+    └── config_manager.py   # 팀원 E: 환경 설정 관리
+
+각 팀원별 파일명 상세
+팀원담당 역할주 파일명설명A암호화 & 보안security.pyhash_password(), encrypt_text(), decrypt_text() 등 보안 함수 집합B파일 시스템 & 데이터storage.pysave_diary(), load_diary(), search_by_date(), update_index() 등 데이터 저장/로드 함수CAI 감정 분석ai_analyzer.pyanalyze_emotion(), summarize_diary(), generate_encouragement() 등 AI 통신 함수D명령어 인터페이스cli.pyparse_command(), execute_command() 등 사용자 입력 처리 및 메인 루프E-1통계 시각화analytics.pyplot_emotion_chart(), generate_weekly_report() 등 시각화 함수E-2환경 설정config_manager.pyload_config(), save_config(), init_default_config() 등 설정 관리 함수
