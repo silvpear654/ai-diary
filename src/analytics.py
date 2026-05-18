@@ -313,9 +313,19 @@ class EmotionAnalytics:
         try:
             import matplotlib.pyplot as plt
             import matplotlib.dates as mdates
+            import matplotlib.font_manager as fm
             from datetime import datetime as dt
         except ImportError:
             return "matplotlib이 설치되지 않았습니다. 'pip install matplotlib'을 실행하세요."
+
+        # 한글 폰트 설정
+        korean_fonts = ['AppleGothic', 'Apple SD Gothic Neo', 'NanumGothic', 'Malgun Gothic']
+        available = [f.name for f in fm.fontManager.ttflist]
+        for font in korean_fonts:
+            if font in available:
+                plt.rcParams['font.family'] = font
+                break
+        plt.rcParams['axes.unicode_minus'] = False
         
         week_emotions = self.get_week_emotions(days)
         dates = [dt.fromisoformat(date) for date, _ in week_emotions]
@@ -426,7 +436,7 @@ if __name__ == "__main__":
         fig = analytics.plot_matplotlib_chart(show=False)
         print("✅ matplotlib 차트가 생성되었습니다!")
         import matplotlib.pyplot as plt
-        plt.savefig("/mnt/user-data/outputs/emotion_chart.png", dpi=100, bbox_inches='tight')
+        plt.savefig("emotion_chart.png", dpi=100, bbox_inches='tight')
         plt.close()
         print("💾 emotion_chart.png로 저장되었습니다.")
     except Exception as e:
