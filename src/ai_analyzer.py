@@ -60,9 +60,9 @@ class AIAnalyzer:
             "반드시 마크다운이나 코드 블록 없이 순수한 JSON 문자열만 응답해야 해.\n\n"
             "형식:\n"
             "{\n"
-            '  "sentiment": "긍정/부정/중립 중 하나",\n'
+            '  "emotion": "매우 행복/행복/보통/슬픔/매우 슬픔 중 하나",\n'
             '  "summary": "일기 내용 1줄 요약",\n'
-            '  "keywords": ["키워드1", "키워드2", "키워드3"],\n'
+            '  "tags": ["태그1", "태그2", "태그3"],\n'
             '  "feedback": "작성자를 위한 따뜻한 조언 한마디"\n'
             "}\n\n"
             f"일기 내용:\n{text}"
@@ -81,9 +81,9 @@ class AIAnalyzer:
     def _mock_analysis(self, _text: str) -> dict:
         """API 연동 전, 또는 테스트를 위한 임시 반환 함수"""
         return {
-            "sentiment": "긍정",
+            "emotion": "보통",
             "summary": "[Mock] 오늘 하루는 전반적으로 평온하고 긍정적인 일이 많았습니다.",
-            "keywords": ["휴식", "대화", "평온"],
+            "tags": ["휴식", "대화", "평온"],
             "feedback": "오늘 하루도 수고 많으셨습니다. 앞으로도 이런 여유를 즐기시길 바라요!"
         }
 

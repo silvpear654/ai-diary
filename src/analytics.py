@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
-import json
+import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
 
 
 class EmotionAnalytics:
@@ -33,67 +34,69 @@ class EmotionAnalytics:
     }
     
     def __init__(self, data_file: str = "emotions.json"):
-        """
-        EmotionAnalytics 초기화
-        
-        Args:
-            data_file: 감정 데이터를 저장할 JSON 파일 경로
-        """
-        self.data_file = Path(data_file)
         self.emotions_data = self._load_emotions()
     
     def _load_emotions(self) -> Dict:
-        """감정 데이터 파일을 로드합니다"""
-        if self.data_file.exists():
-            try:
-                with open(self.data_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except json.JSONDecodeError:
-                return {}
-        return {}
-    
-    def _save_emotions(self) -> bool:
-        """감정 데이터를 파일에 저장합니다"""
-        try:
-            with open(self.data_file, 'w', encoding='utf-8') as f:
-                json.dump(self.emotions_data, f, indent=4, ensure_ascii=False)
-            return True
-        except Exception as e:
-            print(f"❌ 데이터 저장 실패: {e}")
-            return False
-    
-    def add_emotion(self, emotion_level: int, content: str = "", 
+        """vault/index.json에서 감정 데이터를 읽어옵니다"""
+        from storage import _load_index
+        index = _load_index()
+        emotions: Dict = {}
+        for entry in index:
+            date = entry.get("date")
+            if not date:
+                continue
+            emotion_str = entry.get("emotion", "보통")
+            level = self.EMOTION_LEVELS.get(emotion_str) or self.EMOTION_LEVELS_EN.get(emotion_str, 50)
+            emotions[date] = [{
+                "level": level,
+                "content": entry.get("summary", ""),
+                "timestamp": date + "T00:00:00"
+            }]
+        return emotions
+
+    def add_emotion(self, emotion_level: int, content: str = "",
                    timestamp: Optional[str] = None) -> bool:
-        """
-        감정 데이터를 추가합니다
-        
-        Args:
-            emotion_level: 감정 레벨 (0-100)
-            content: 일기 내용
-            timestamp: 타임스탬프 (기본값: 현재 시간)
-        
-        Returns:
-            성공 여부
-        """
+        """감정 데이터를 vault에 저장합니다"""
         if not 0 <= emotion_level <= 100:
             print("❌ 감정 레벨은 0-100 사이여야 합니다.")
             return False
-        
+
         if timestamp is None:
             timestamp = datetime.now().isoformat()
-        
-        date_key = timestamp[:10]  # YYYY-MM-DD
-        
-        if date_key not in self.emotions_data:
-            self.emotions_data[date_key] = []
-        
-        self.emotions_data[date_key].append({
+
+        date_key = timestamp[:10]
+        emotion_str = self._level_to_emotion_str(emotion_level)
+
+        from storage import save_diary
+        save_diary(
+            date_str=date_key,
+            title=f"{date_key} 감정 기록",
+            encrypted_content=content,
+            emotion=emotion_str,
+            summary=content[:80] if content else "",
+            tags=[]
+        )
+
+        # 로컬 캐시 갱신
+        self.emotions_data[date_key] = [{
             "level": emotion_level,
             "content": content,
             "timestamp": timestamp
-        })
-        
-        return self._save_emotions()
+        }]
+        return True
+
+    @staticmethod
+    def _level_to_emotion_str(level: int) -> str:
+        if level >= 80:
+            return "매우 행복"
+        elif level >= 60:
+            return "행복"
+        elif level >= 40:
+            return "보통"
+        elif level >= 20:
+            return "슬픔"
+        else:
+            return "매우 슬픔"
     
     def get_week_emotions(self, days: int = 7) -> List[Tuple[str, float]]:
         """
@@ -397,7 +400,7 @@ if __name__ == "__main__":
     print("🚀 EmotionAnalytics 테스트 시작\n")
     
     # Analytics 인스턴스 생성
-    analytics = EmotionAnalytics("emotions.json")
+    analytics = EmotionAnalytics()
     
     # 테스트 데이터 추가 (지난 7일간)
     print("📝 테스트 데이터를 추가합니다...\n")
@@ -414,7 +417,7 @@ if __name__ == "__main__":
     ]
     
     for i, (level, content) in enumerate(test_data):
-        timestamp = (base_date + timedelta(days=i)).isoformat() + "T10:00:00"
+        timestamp = (base_date + timedelta(days=i)).date().isoformat() + "T10:00:00"
         analytics.add_emotion(level, content, timestamp)
         print(f"  ✅ {timestamp[:10]} - 감정 {level}% 추가")
     
