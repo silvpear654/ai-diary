@@ -33,20 +33,40 @@ class EmotionAnalytics:
         10: "😢"
     }
     
-    def __init__(self, data_file: str = "emotions.json"):
-        self.emotions_data = self._load_emotions()
+    def __init__(self, data_file: str = "emotions.json", password_key: Optional[str] = None, is_test: bool = False):
+        self.password_key = password_key
+        self.is_test = is_test
+        if is_test:
+            self.emotions_data = {}
+        else:
+            self.emotions_data = self._load_emotions(password_key)
     
-    def _load_emotions(self) -> Dict:
+    def _load_emotions(self, password_key: Optional[str] = None) -> Dict:
         """vault/index.json에서 감정 데이터를 읽어옵니다"""
         from storage import _load_index
-        index = _load_index()
+        index = _load_index(password_key)
         emotions: Dict = {}
         for entry in index:
             date = entry.get("date")
             if not date:
                 continue
             emotion_str = entry.get("emotion", "보통")
-            level = self.EMOTION_LEVELS.get(emotion_str) or self.EMOTION_LEVELS_EN.get(emotion_str, 50)
+            
+            # 감정 명칭 정규화 (공백 제거 및 키워드 매칭 완화)
+            emotion_str_clean = emotion_str.strip()
+            if "매우 행복" in emotion_str_clean:
+                level = 90
+            elif "행복" in emotion_str_clean:
+                level = 75
+            elif "매우 슬픔" in emotion_str_clean:
+                level = 10
+            elif "슬픔" in emotion_str_clean:
+                level = 25
+            elif "보통" in emotion_str_clean or "평온" in emotion_str_clean or "무난" in emotion_str_clean:
+                level = 50
+            else:
+                level = self.EMOTION_LEVELS.get(emotion_str_clean) or self.EMOTION_LEVELS_EN.get(emotion_str_clean.lower(), 50)
+                
             emotions[date] = [{
                 "level": level,
                 "content": entry.get("summary", ""),
@@ -55,7 +75,7 @@ class EmotionAnalytics:
         return emotions
 
     def add_emotion(self, emotion_level: int, content: str = "",
-                   timestamp: Optional[str] = None) -> bool:
+                   timestamp: Optional[str] = None, password_key: Optional[str] = None) -> bool:
         """감정 데이터를 vault에 저장합니다"""
         if not 0 <= emotion_level <= 100:
             print("❌ 감정 레벨은 0-100 사이여야 합니다.")
@@ -67,15 +87,17 @@ class EmotionAnalytics:
         date_key = timestamp[:10]
         emotion_str = self._level_to_emotion_str(emotion_level)
 
-        from storage import save_diary
-        save_diary(
-            date_str=date_key,
-            title=f"{date_key} 감정 기록",
-            encrypted_content=content,
-            emotion=emotion_str,
-            summary=content[:80] if content else "",
-            tags=[]
-        )
+        if not self.is_test:
+            from storage import save_diary
+            save_diary(
+                date_str=date_key,
+                title=f"{date_key} 감정 기록",
+                encrypted_content=content,
+                emotion=emotion_str,
+                summary=content[:80] if content else "",
+                tags=[],
+                password_key=password_key
+            )
 
         # 로컬 캐시 갱신
         self.emotions_data[date_key] = [{
@@ -277,6 +299,8 @@ class EmotionAnalytics:
             
             if level is None:
                 bar = "[데이터 없음]"
+                emoji = "  "
+                level_str = "N/A"
             else:
                 bar_length = int((level / 100) * bar_width)
                 
@@ -294,8 +318,9 @@ class EmotionAnalytics:
                 
                 bar = bar_char * bar_length
                 emoji = self.EMOTION_EMOJIS.get(int(level // 10 * 10), "😐")
+                level_str = f"{level:.0f}%"
             
-            line = f"{day} {emoji} │ {bar} {level if level else 'N/A':.0f}%".ljust(width)
+            line = f"{day} {emoji} │ {bar} {level_str}".ljust(width)
             chart_lines.append(line)
         
         chart_lines.append("─" * width)
@@ -399,8 +424,8 @@ class EmotionAnalytics:
 if __name__ == "__main__":
     print("🚀 EmotionAnalytics 테스트 시작\n")
     
-    # Analytics 인스턴스 생성
-    analytics = EmotionAnalytics()
+    # Analytics 인스턴스 생성 (테스트 모드로 가짜 데이터가 메모리에만 생성됨)
+    analytics = EmotionAnalytics(is_test=True)
     
     # 테스트 데이터 추가 (지난 7일간)
     print("📝 테스트 데이터를 추가합니다...\n")

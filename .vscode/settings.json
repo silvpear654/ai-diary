@@ -1,0 +1,4 @@
+{
+    "python.analysis.extraPaths": ["src"],
+    "code-runner.runInTerminal": true
+}

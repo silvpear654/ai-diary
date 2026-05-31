@@ -78,7 +78,13 @@ class ConfigManager:
         Args:
             config_path: 설정 파일 경로 (기본값: config.json)
         """
-        self.config_path = Path(config_path)
+        path = Path(config_path)
+        if not path.is_absolute():
+            # config_manager.py가 속한 디렉토리의 부모 디렉토리를 루트로 삼아 절대 경로 구성
+            project_root = Path(__file__).resolve().parent.parent
+            self.config_path = project_root / path
+        else:
+            self.config_path = path
         self.config = None
         self.load_or_create()
     
