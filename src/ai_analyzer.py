@@ -16,6 +16,12 @@ class AIAnalyzer:
     """
     사용자의 일기를 Google Gemini AI로 분석하여 감정, 요약, 키워드, 조언 등을 제공하는 클래스입니다.
     """
+    # 사용 모델명. 환경 변수 GEMINI_MODEL 로 덮어쓸 수 있습니다. (기본: 2.5 flash lite)
+    DEFAULT_MODEL = 'gemini-2.5-flash-lite'
+
+    # 허용되는 감정 값 (analytics 등 다른 모듈과 약속된 5단계)
+    VALID_EMOTIONS = ("매우 행복", "행복", "보통", "슬픔", "매우 슬픔")
+
     def __init__(self, api_key=None):
         """
         :param api_key: Gemini API 키. 입력하지 않으면 환경 변수 'GEMINI_API_KEY'에서 가져옵니다.
@@ -32,11 +38,18 @@ class AIAnalyzer:
         """Gemini API 설정을 초기화합니다."""
         try:
             from google import genai
-            self.client = genai.Client(api_key=self.api_key)
-            # 사용자의 요청에 따라 2.5 버전의 flash lite 모델을 사용합니다.
-            self.model = 'gemini-2.5-flash-lite'
         except ImportError:
             print("⚠️ Error: 'google-genai' 패키지가 설치되지 않았습니다. 터미널에서 'pip install google-genai'를 실행해주세요.")
+            self.api_key = None
+            return
+
+        try:
+            self.client = genai.Client(api_key=self.api_key)
+            # 모델명은 환경 변수로 덮어쓸 수 있으며, 없으면 기본값을 사용합니다.
+            self.model = os.environ.get("GEMINI_MODEL", self.DEFAULT_MODEL)
+        except Exception as e:
+            # 잘못된 키 형식 등 Client 생성 단계의 오류도 안전하게 처리하여 Mock 모드로 전환합니다.
+            print(f"⚠️ Error: Gemini 클라이언트 초기화에 실패했습니다 ({e}). 테스트용(Mock) 데이터로 동작합니다.")
             self.api_key = None
 
     def analyze(self, diary_content: str) -> dict:
@@ -79,9 +92,33 @@ class AIAnalyzer:
             match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if not match:
                 return {"error": "AI 응답에서 JSON을 찾을 수 없습니다."}
-            return json.loads(match.group())
+            return self._normalize_result(json.loads(match.group()))
         except Exception as e:
             return {"error": f"분석 중 오류가 발생했습니다: {str(e)}"}
+
+    def _normalize_result(self, data: dict) -> dict:
+        """
+        AI 응답을 약속된 스키마(emotion/summary/tags/feedback)로 보정합니다.
+        키가 누락되거나 타입/값이 잘못되어도 다른 모듈이 안전하게 쓸 수 있도록 기본값을 채웁니다.
+        """
+        if not isinstance(data, dict):
+            return {"error": "AI 응답 형식이 올바르지 않습니다."}
+
+        emotion = data.get("emotion", "보통")
+        if emotion not in self.VALID_EMOTIONS:
+            emotion = "보통"
+
+        tags = data.get("tags", [])
+        if not isinstance(tags, list):
+            tags = []
+        tags = [str(t) for t in tags]
+
+        return {
+            "emotion": emotion,
+            "summary": str(data.get("summary", "")),
+            "tags": tags,
+            "feedback": str(data.get("feedback", "")),
+        }
 
     def _mock_analysis(self, _text: str) -> dict:
         """API 연동 전, 또는 테스트를 위한 임시 반환 함수"""

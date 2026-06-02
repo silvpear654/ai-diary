@@ -207,11 +207,12 @@ def interactive_write(password_key: str):
     emotion_str = analysis_result.get("emotion", "보통")
     summary_str = analysis_result.get("summary", "")
     tags_list = analysis_result.get("tags", [])
-    
+    feedback_str = analysis_result.get("feedback", "")
+
     print(f"💜 오늘 나의 감정 : {emotion_str}")
     print(f"📌 한 줄 요약    : {summary_str}")
     print(f"🏷️ 생성된 태그   : {', '.join(tags_list)}")
-    print(f"💌 AI의 따뜻한 한마디: {analysis_result.get('feedback')}")
+    print(f"💌 AI의 따뜻한 한마디: {feedback_str}")
     print("=" * 54 + "\n")
     
     # [보안 연동] 일기 원문 암호화
@@ -227,6 +228,7 @@ def interactive_write(password_key: str):
         emotion=emotion_str,
         summary=summary_str,
         tags=tags_list,
+        feedback=feedback_str,
         password_key=password_key
     )
     print("💾 [저장 완료] 일기가 안전하게 암호화되어 저장되었습니다.")
@@ -261,6 +263,11 @@ def _cli_read(date_str: str, password_key: str):
         print(f"🏷️ 태그: {', '.join(diary_data['tags'])}")
         print("-" * 50)
         print(decrypted_content)
+        # 과거에 저장된 일기에는 feedback 키가 없을 수 있으므로 안전하게 처리합니다.
+        feedback_str = diary_data.get("feedback", "")
+        if feedback_str:
+            print("-" * 50)
+            print(f"💌 AI의 따뜻한 한마디: {feedback_str}")
         print("=" * 54 + "\n")
     except ValueError as e:
         print(f"❌ 복호화 실패: {e}")

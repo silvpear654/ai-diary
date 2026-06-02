@@ -25,7 +25,7 @@ def init_storage():
         _save_index([])
 
 
-def save_diary(date_str, title, encrypted_content, emotion, summary, tags, password_key=None):
+def save_diary(date_str, title, encrypted_content, emotion, summary, tags, feedback="", password_key=None):
     """팀원 D(CLI)나 C(AI)가 넘겨준 데이터를 받아 JSON 파일로 저장하는 함수"""
     init_storage()
     day_dir = VAULT_DIR / date_str
@@ -37,7 +37,8 @@ def save_diary(date_str, title, encrypted_content, emotion, summary, tags, passw
         "content": encrypted_content,
         "emotion": emotion,
         "summary": summary,
-        "tags": tags if isinstance(tags, list) else []
+        "tags": tags if isinstance(tags, list) else [],
+        "feedback": feedback
     }
 
     diary_path = day_dir / "diary.json"
