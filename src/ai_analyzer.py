@@ -1,9 +1,14 @@
+import sys
 import os
 import re
 import json
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+if getattr(sys, 'frozen', False):
+    load_dotenv(Path(sys.executable).parent / '.env')
+else:
+    load_dotenv()
 
 
 

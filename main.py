@@ -1,8 +1,21 @@
 # src/main.py
 import sys
 import os
-import getpass
+import warnings
 from datetime import datetime
+
+
+def _getpass(prompt):
+    """getpass 래퍼: TTY 없는 환경에서는 일반 input으로 대체"""
+    import getpass as _gp
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return _gp.getpass(prompt)
+    except (EOFError, OSError):
+        print("\n[오류] 비밀번호 입력을 위해 터미널에서 실행해주세요.")
+        print("       macOS: 'dist/실행하기.command' 파일을 더블클릭하세요.\n")
+        sys.exit(1)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -15,48 +28,158 @@ from config_manager import ConfigManager
 from security import encrypt_text, decrypt_text
 import storage
 
-def authenticate(config: ConfigManager) -> tuple[bool, str]:
+def get_users_root():
+    """users/ 루트 디렉토리 경로 반환 (없으면 생성)"""
+    from pathlib import Path
+    if getattr(sys, 'frozen', False):
+        base = Path(sys.executable).parent
+    else:
+        base = Path(os.path.abspath(__file__)).parent
+    users_root = base / "users"
+    users_root.mkdir(exist_ok=True)
+    return users_root
+
+
+def list_users(users_root):
+    """users/ 아래 config.json이 있는 사용자 목록 반환"""
+    from pathlib import Path
+    return sorted([
+        d.name for d in Path(users_root).iterdir()
+        if d.is_dir() and (d / "config.json").exists()
+    ])
+
+
+def delete_user(users_root):
+    """사용자 삭제 — 비밀번호 확인 후 디렉토리 전체 삭제"""
+    import shutil
+    from pathlib import Path
+
+    users = list_users(users_root)
+    if not users:
+        print("❌ 삭제할 사용자가 없습니다.")
+        return
+
+    print("\n" + "=" * 20 + " 🗑️  사용자 삭제 " + "=" * 20)
+    for i, name in enumerate(users, 1):
+        print(f"  {i}. {name}")
+    print("  0. 취소")
+    print("=" * 54)
+
+    choice = input("삭제할 사용자 번호 > ").strip()
+    if choice == "0" or not choice:
+        print("취소했습니다.")
+        return
+    if not (choice.isdigit() and 1 <= int(choice) <= len(users)):
+        print("❌ 올바른 번호를 입력하세요.")
+        return
+
+    username = users[int(choice) - 1]
+    user_dir = Path(users_root) / username
+
+    # 비밀번호 확인
+    print(f"\n⚠️  '{username}' 사용자와 모든 일기 데이터가 영구 삭제됩니다.")
+    config = ConfigManager(str(user_dir / "config.json"))
+    for attempt in range(3):
+        pwd = _getpass(f"[{username}] 비밀번호를 입력하세요: ")
+        if config.verify_password(pwd):
+            break
+        remaining = 2 - attempt
+        if remaining > 0:
+            print(f"❌ 비밀번호가 틀렸습니다. (남은 횟수: {remaining}/3)")
+        else:
+            print("❌ 비밀번호 3회 오류. 삭제를 취소합니다.")
+            return
+    else:
+        return
+
+    confirm = input(f"정말 삭제하시겠습니까? (삭제하려면 '{username}' 입력): ").strip()
+    if confirm != username:
+        print("취소했습니다.")
+        return
+
+    shutil.rmtree(user_dir)
+    print(f"✅ '{username}' 사용자가 삭제되었습니다.")
+
+
+def select_or_create_user(users_root):
+    """사용자 선택 또는 신규 생성. (username, user_dir) 반환"""
+    from pathlib import Path
+    INVALID_CHARS = set('/\\:*?"<>|')
+
+    while True:
+        users = list_users(users_root)
+        print("\n" + "=" * 20 + " 👤 사용자 선택 " + "=" * 20)
+        if users:
+            for i, name in enumerate(users, 1):
+                print(f"  {i}. {name}")
+        else:
+            print("  (등록된 사용자가 없습니다)")
+        print("  0. 새 사용자 추가")
+        print("  d. 사용자 삭제")
+        print("=" * 54)
+
+        choice = input("선택 > ").strip().lower()
+
+        if choice == "d":
+            delete_user(users_root)
+            continue
+
+        if choice == "0":
+            username = input("새 사용자 이름: ").strip()
+            if not username:
+                print("❌ 이름을 입력해주세요.")
+                continue
+            if any(c in INVALID_CHARS for c in username):
+                print("❌ 이름에 사용할 수 없는 문자가 포함되어 있습니다 (/ \\ : * ? \" < > |)")
+                continue
+            user_dir = Path(users_root) / username
+            if user_dir.exists():
+                print(f"❌ '{username}' 사용자가 이미 존재합니다.")
+                continue
+            user_dir.mkdir()
+            print(f"✅ 사용자 '{username}' 생성 완료!")
+            return username, user_dir
+
+        if choice.isdigit() and 1 <= int(choice) <= len(users):
+            username = users[int(choice) - 1]
+            return username, Path(users_root) / username
+
+        print("❌ 올바른 번호를 입력하세요.")
+
+
+def authenticate(config: ConfigManager, username: str) -> tuple[bool, str]:
     """비밀번호 인증을 진행하고 패스워드 평문을 반환합니다."""
     stored_hash = config.get("security.password_hash")
-    
-    # 1. 초기 실행 (비밀번호 등록)
+
+    # 1. 신규 사용자 — 비밀번호 등록
     if not stored_hash:
-        print("🔐 [초기 설정] AI 보안 일기장에 오신 것을 환영합니다!")
-        print("안전한 일기장 사용을 위해 사용할 비밀번호를 설정해 주세요. (8자 이상, 문자/숫자/특수문자 모두 포함)")
-        
+        print(f"🔐 [{username}] 처음 사용하시는군요! 비밀번호를 설정해주세요. (8자 이상, 문자/숫자/특수문자 포함)")
         while True:
-            pwd = getpass.getpass("새 비밀번호 입력: ")
+            pwd = _getpass("새 비밀번호 입력: ")
             if not pwd:
-                print("[오류] 비밀번호는 필수 입력 사항입니다.")
+                print("[오류] 비밀번호는 필수입니다.")
                 continue
-            pwd_confirm = getpass.getpass("새 비밀번호 확인: ")
-            
+            pwd_confirm = _getpass("새 비밀번호 확인: ")
             if pwd != pwd_confirm:
                 print("❌ 비밀번호가 일치하지 않습니다. 다시 시도하세요.\n")
                 continue
-                
             if config.change_password(pwd):
-                username = input("사용하실 닉네임을 입력하세요 (기본값: User): ").strip()
-                if username:
-                    config.set("user.username", username)
-                print(f"🎉 설정 완료! 반갑습니다, {config.get('user.username')}님.")
+                config.set("user.username", username)
+                print(f"🎉 설정 완료! 반갑습니다, {username}님.")
                 return True, pwd
             else:
-                # config.change_password() 내부에서 "weak_password" 에러를 이미 출력함
                 print()
                 continue
 
-    # 2. 로그인
-    print(f"🔒 {config.get('user.username')}님의 일기장 잠금을 해제합니다.")
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        pwd = getpass.getpass("비밀번호를 입력하세요: ")
+    # 2. 기존 사용자 — 로그인
+    print(f"🔒 {username}님의 일기장 잠금을 해제합니다.")
+    for attempt in range(3):
+        pwd = _getpass("비밀번호를 입력하세요: ")
         if config.verify_password(pwd):
             print("🔓 인증 성공! 일기장을 엽니다.\n")
             return True, pwd
-        else:
-            print(f"❌ 비밀번호가 틀렸습니다. (남은 횟수: {max_attempts - attempt - 1}/3)")
-            
+        print(f"❌ 비밀번호가 틀렸습니다. (남은 횟수: {2 - attempt}/3)")
+
     print("\n🚨 [보안] 비밀번호 3회 오류로 프로그램을 강제 종료합니다.")
     return False, ""
 
@@ -273,25 +396,25 @@ def main():
         try:
             args = parse_arguments()
         except SystemExit:
-            # required=True 에 걸리거나 문법 오류 시, 로그인 프롬프트를 띄우지 않고 도움말/오류 출력 후 정상 종료
             sys.exit(0)
 
-    # 4. 저장소 초기화
+    # 4. 사용자 선택
+    users_root = get_users_root()
+    username, user_dir = select_or_create_user(users_root)
+
+    # 5. 사용자별 저장소 초기화
+    storage.set_user_dir(user_dir)
     storage.init_storage()
-    
-    # 5. 설정 및 로그인 인증
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(project_root, "config.json")
-    config = ConfigManager(config_path)
-    
-    is_authenticated, password_key = authenticate(config)
+
+    # 6. 사용자별 설정 로드 및 인증
+    config = ConfigManager(str(user_dir / "config.json"))
+    is_authenticated, password_key = authenticate(config, username)
     if not is_authenticated:
         sys.exit(1)
 
-    # 로그인 성공 후 기존 평문 index.json이 있다면 안전하게 암호화 포맷으로 마이그레이션
     storage.migrate_index_to_encrypted(password_key)
 
-    # 6. 실행 모드 실행
+    # 7. 실행 모드 실행
     if is_interactive:
         run_interactive_menu(config, password_key)
     else:

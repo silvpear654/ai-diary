@@ -1,11 +1,21 @@
 # src/storage.py
+import sys
 import json
 from pathlib import Path
 
-# storage.py가 속한 디렉토리의 부모 디렉토리(ai-diary)를 루트로 삼아 절대 경로 구성
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if getattr(sys, 'frozen', False):
+    PROJECT_ROOT = Path(sys.executable).parent
+else:
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VAULT_DIR = PROJECT_ROOT / "vault"
 INDEX_FILE = VAULT_DIR / "index.json"
+
+
+def set_user_dir(user_dir: Path):
+    """사용자별 vault 경로를 세션에 맞게 설정합니다."""
+    global VAULT_DIR, INDEX_FILE
+    VAULT_DIR = Path(user_dir) / "vault"
+    INDEX_FILE = VAULT_DIR / "index.json"
 
 
 def init_storage():

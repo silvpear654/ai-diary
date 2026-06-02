@@ -1,0 +1,50 @@
+name: Build Executables
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            artifact_name: ai-diary
+            asset_name: ai-diary-macos
+          - os: windows-latest
+            artifact_name: ai-diary.exe
+            asset_name: ai-diary-windows.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build executable
+        run: >
+          pyinstaller
+          --onefile
+          --name ai-diary
+          --paths src
+          --hidden-import google.genai
+          --hidden-import google.generativeai
+          --hidden-import cryptography.hazmat.primitives.ciphers
+          --hidden-import cryptography.hazmat.backends.openssl
+          --collect-all google.genai
+          main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.artifact_name }}
